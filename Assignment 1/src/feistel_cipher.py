@@ -9,68 +9,17 @@
 # Feistel cipher.
 ###############################################################################
 
-import ConfigParser
-import time
-import logging
 from bitarray import bitarray
-import math
 from des import DES
 import bitutils
 
 
 class FeistelCipher(object):
-    def __init__(self, number_of_rounds=16, block_size=64, key_size=56):
+    def __init__(self, number_of_rounds=16, block_size=64, key_size=64):
 
         self.number_of_rounds = number_of_rounds
         self.block_size = block_size
         self.key_size = key_size
-
-        self.plaintext = ""
-        self.key = ""
-        self.cipher = ""
-        self.logger = None
-        self.init_logging()
-
-    def init_logging(self):
-        cfg = ConfigParser.ConfigParser()
-        cfg.read('config.cfg')
-        logging_enabled = cfg.getboolean('Logging', 'enabled')
-        logging_level = cfg.get('Logging', 'level')
-        log_to_file = cfg.getboolean('Logging', 'log_to_file')
-        log_to_console = cfg.getboolean('Logging', 'log_to_console')
-
-        if logging_level.lower() == "critical":
-            level = logging.CRITICAL
-        elif logging_level.lower() == "info":
-            level = logging.INFO
-        elif logging_level.lower() == "warning":
-            level = logging.WARNING
-        elif logging_level.lower() == "error":
-            level = logging.ERROR
-        else:
-            level = logging.DEBUG
-
-        self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(level)
-        log_formatter = logging.Formatter("[%(levelname)s]: %(message)s")
-
-        if log_to_file:
-            # Truncate existing log.
-            with open('feistel_cipher.log', 'w'):
-                pass
-            file_handler = logging.FileHandler("feistel_cipher.log")
-            file_handler.setFormatter(log_formatter)
-            self.logger.addHandler(file_handler)
-        if log_to_console:
-            console_handler = logging.StreamHandler()
-            console_handler.setFormatter(log_formatter)
-            self.logger.addHandler(console_handler)
-
-        if not logging_enabled:
-            logging.disable(logging.CRITICAL)
-
-        self.logger.info("---------- Logging started %s, %s ----------\n",
-                         time.strftime("%d.%m.%y"), time.strftime("%H:%M:%S"))
 
     def parse_plaintext(self, plaintext):
 
@@ -80,7 +29,7 @@ class FeistelCipher(object):
             if c is not "0" or c is not "1":
                 binary = False
 
-        self.logger.debug("Input is binary? %s", binary)
+        print("Input is binary? %s", binary)
 
         if binary:
             parsed = bitarray(plaintext)
@@ -173,7 +122,7 @@ class FeistelCipher(object):
         return expanded
 
     def substitute(self, bits):
-        blocks = self.split_bits(bits, 6)
+        blocks = self.chunks(bits, 6)
         new_bits = []
 
         for i, block in enumerate(blocks):
@@ -200,43 +149,19 @@ class FeistelCipher(object):
 
         return permuted
 
-    def PC1_key(self, key):
-        assert (len(key) == 64)
-        permuted_key = bitarray(56)
-
-        for i, p in enumerate(DES.PC1):
-            permuted_key[i] = key[p - 1]
-
-        assert (len(permuted_key) == 56)
-        return permuted_key
-
-
     @staticmethod
-    def PC2_key(key):
-        permuted_key = bitarray(len(DES.PC2))
+    def permute_key(key, permutation_table):
+        permuted_key = bitarray(len(permutation_table))
 
-        for i, p in enumerate(DES.PC2):
+        for i, p in enumerate(permutation_table):
             permuted_key[i] = key[p - 1]
 
         return permuted_key
-
-    @staticmethod
-    def split_bits(bits, number_of_bits=6):
-
-        # blocks = []
-
-        #for i in range(0, bits, number_of_bits):
-        #    blocks.append(bits[i:i+number_of_bits])
-
-        chunks = [bits[x:x + number_of_bits] for x in xrange(0, len(bits),
-                                                             number_of_bits)]
-
-        return chunks
 
     def generate_sub_keys(self, key):
         sub_keys = []
 
-        permuted_key = self.PC1_key(key)
+        permuted_key = self.permute_key(key, DES.PC1)
 
         left, right = bitutils.split_list(permuted_key)
 
@@ -246,7 +171,7 @@ class FeistelCipher(object):
 
             shifted_key = left + right
 
-            sub_key = self.PC2_key(shifted_key)
+            sub_key = self.permute_key(shifted_key, DES.PC2)
 
             sub_keys.append(sub_key)
 

@@ -13,7 +13,7 @@ from bitarray import bitarray
 def main():
 
     des = FeistelCipher()
-    cipher = des.encrypt("11110000", "sandvest")
+    cipher = des.encrypt("stian", "sandvest")
     plaintext = des.decrypt(cipher.tobytes(), "sandvest")
     print(plaintext.tobytes())
 
