@@ -19,7 +19,6 @@ import bitutils
 
 
 class FeistelCipher(object):
-
     def __init__(self, number_of_rounds=16, block_size=64, key_size=56):
 
         self.number_of_rounds = number_of_rounds
@@ -70,7 +69,7 @@ class FeistelCipher(object):
         if not logging_enabled:
             logging.disable(logging.CRITICAL)
 
-        self.logger.info("\n---------- Logging started %s, %s ----------\n",
+        self.logger.info("---------- Logging started %s, %s ----------\n",
                          time.strftime("%d.%m.%y"), time.strftime("%H:%M:%S"))
 
     def parse_plaintext(self, plaintext):
@@ -97,23 +96,22 @@ class FeistelCipher(object):
 
         bits = self.parse_plaintext(plaintext)
 
-        number_of_blocks = int(math.ceil(bits.length()/self.block_size))
-        self.logger.debug("Number of blocks = %i", number_of_blocks)
-
         blocks = FeistelCipher.chunks(bits, self.block_size)
 
         sub_keys = self.generate_sub_keys(self.parse_plaintext(key))
+
         if not encrypt:
             sub_keys.reverse()
 
         for i in range(len(blocks)):
             block = blocks[i]
+
             block = self.permute_block(block, DES.IP)
 
             for rnd in range(self.number_of_rounds):
                 block = self.encrypt_round(block, sub_keys[rnd])
 
-            block = bitutils.split_list(block)
+            block = bitutils.swap_list(block)
 
             block = self.permute_block(block, DES.IP_inverse)
 
@@ -121,47 +119,18 @@ class FeistelCipher(object):
 
         return result
 
-    def get_blocks(self, plaintext):
-
-        blocks = []
-
-        # How many full blocks can we get?
-        number_of_full_blocks = int(math.ceil(plaintext.length()/self.block_size))
-        for i in range(0, number_of_full_blocks, self.block_size):
-            blocks.append(bitarray(plaintext[i:i+self.block_size]))
-
-        rest = plaintext.length() % self.block_size
-        is_padding_required = rest != 0
-
-        if is_padding_required:
-            from_idx = plaintext.length() - rest
-            to_idx = rest
-            bits = plaintext[from_idx:to_idx]
-            last_block = bitarray(self.block_size)
-            start_at = self.block_size - rest
-            for i in range(self.block_size):
-                if i < start_at:
-                    last_block[i] = False
-                else:
-                    last_block[i] = bits[i]
-            blocks.append(last_block)
-
-        self.logger.debug(blocks)
-        self.logger.debug(len(blocks))
-        return blocks
-
     @staticmethod
     def chunks(l, n):
         padding_required = (len(l) % n) != 0
         n = max(1, n)
         c = [l[i:i + n] for i in range(0, len(l), n)]
         if padding_required:
-            zeros = [False] * (n - len(c[len(c)-1]))
-            c[len(c)-1] = bitarray(zeros) + c[len(c)-1]
+            zeros = [False] * (n - len(c[len(c) - 1]))
+            c[len(c) - 1] = bitarray(zeros) + c[len(c) - 1]
         return c
 
     def decrypt(self, ciphertext, key):
-        return self.encrypt(ciphertext, key.reverse, encrypt=False)
+        return self.encrypt(ciphertext, key, encrypt=False)
 
     def encrypt_block(self, block):
 
@@ -232,13 +201,13 @@ class FeistelCipher(object):
         return permuted
 
     def PC1_key(self, key):
-        assert(len(key) == 64)
+        assert (len(key) == 64)
         permuted_key = bitarray(56)
 
         for i, p in enumerate(DES.PC1):
-            permuted_key[i] = key[p-1]
+            permuted_key[i] = key[p - 1]
 
-        assert(len(permuted_key) == 56)
+        assert (len(permuted_key) == 56)
         return permuted_key
 
 
@@ -247,19 +216,20 @@ class FeistelCipher(object):
         permuted_key = bitarray(len(DES.PC2))
 
         for i, p in enumerate(DES.PC2):
-            permuted_key[i] = key[p-1]
+            permuted_key[i] = key[p - 1]
 
         return permuted_key
 
     @staticmethod
     def split_bits(bits, number_of_bits=6):
 
-        #blocks = []
+        # blocks = []
 
         #for i in range(0, bits, number_of_bits):
         #    blocks.append(bits[i:i+number_of_bits])
 
-        chunks = [bits[x:x+number_of_bits] for x in xrange(0, len(bits), number_of_bits)]
+        chunks = [bits[x:x + number_of_bits] for x in xrange(0, len(bits),
+                                                             number_of_bits)]
 
         return chunks
 
@@ -286,7 +256,6 @@ class FeistelCipher(object):
     def permute_block(block, permutation_table):
         permuted_block = bitarray(len(block))
 
-        print(len(block))
         for i, b in enumerate(block):
             permuted_block[i] = block[permutation_table[i] - 1]
 

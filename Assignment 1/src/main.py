@@ -12,12 +12,10 @@ from bitarray import bitarray
 
 def main():
 
-    a = bitarray()
-    a.frombytes("stian")
-
     des = FeistelCipher()
-    cipher = des.encrypt("ssssssss", "sandvest")
-    print(cipher)
+    cipher = des.encrypt("11110000", "sandvest")
+    plaintext = des.decrypt(cipher.tobytes(), "sandvest")
+    print(plaintext.tobytes())
 
 if __name__ == '__main__':
     main()
