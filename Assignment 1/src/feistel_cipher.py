@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 ##############################################################################
-# @file    FeistelCipher.py
+# @file    feistel_cipher.py
 # @author  Stian Sandve
 # @version V1.0.0
 # @date    9-Sep-2014
@@ -12,11 +12,23 @@
 import ConfigParser
 import time
 import logging
+from bitarray import bitarray
+import math
+from des import DES
+import bitutils
 
 
 class FeistelCipher(object):
 
-    def __init__(self):
+    def __init__(self, number_of_rounds=16, block_size=64, key_size=56):
+
+        self.number_of_rounds = number_of_rounds
+        self.block_size = block_size
+        self.key_size = key_size
+
+        self.plaintext = ""
+        self.key = ""
+        self.cipher = ""
         self.logger = None
         self.init_logging()
 
@@ -60,3 +72,222 @@ class FeistelCipher(object):
 
         self.logger.info("\n---------- Logging started %s, %s ----------\n",
                          time.strftime("%d.%m.%y"), time.strftime("%H:%M:%S"))
+
+    def parse_plaintext(self, plaintext):
+
+        binary = True
+
+        for c in plaintext:
+            if c is not "0" or c is not "1":
+                binary = False
+
+        self.logger.debug("Input is binary? %s", binary)
+
+        if binary:
+            parsed = bitarray(plaintext)
+        else:
+            parsed = bitarray()
+            parsed.frombytes(plaintext)
+
+        return parsed
+
+    def encrypt(self, plaintext, key, encrypt=True):
+
+        result = bitarray()
+
+        bits = self.parse_plaintext(plaintext)
+
+        number_of_blocks = int(math.ceil(bits.length()/self.block_size))
+        self.logger.debug("Number of blocks = %i", number_of_blocks)
+
+        blocks = FeistelCipher.chunks(bits, self.block_size)
+
+        sub_keys = self.generate_sub_keys(self.parse_plaintext(key))
+        if not encrypt:
+            sub_keys.reverse()
+
+        for i in range(len(blocks)):
+            block = blocks[i]
+            block = self.permute_block(block, DES.IP)
+
+            for rnd in range(self.number_of_rounds):
+                block = self.encrypt_round(block, sub_keys[rnd])
+
+            block = bitutils.split_list(block)
+
+            block = self.permute_block(block, DES.IP_inverse)
+
+            result.extend(block)
+
+        return result
+
+    def get_blocks(self, plaintext):
+
+        blocks = []
+
+        # How many full blocks can we get?
+        number_of_full_blocks = int(math.ceil(plaintext.length()/self.block_size))
+        for i in range(0, number_of_full_blocks, self.block_size):
+            blocks.append(bitarray(plaintext[i:i+self.block_size]))
+
+        rest = plaintext.length() % self.block_size
+        is_padding_required = rest != 0
+
+        if is_padding_required:
+            from_idx = plaintext.length() - rest
+            to_idx = rest
+            bits = plaintext[from_idx:to_idx]
+            last_block = bitarray(self.block_size)
+            start_at = self.block_size - rest
+            for i in range(self.block_size):
+                if i < start_at:
+                    last_block[i] = False
+                else:
+                    last_block[i] = bits[i]
+            blocks.append(last_block)
+
+        self.logger.debug(blocks)
+        self.logger.debug(len(blocks))
+        return blocks
+
+    @staticmethod
+    def chunks(l, n):
+        padding_required = (len(l) % n) != 0
+        n = max(1, n)
+        c = [l[i:i + n] for i in range(0, len(l), n)]
+        if padding_required:
+            zeros = [False] * (n - len(c[len(c)-1]))
+            c[len(c)-1] = bitarray(zeros) + c[len(c)-1]
+        return c
+
+    def decrypt(self, ciphertext, key):
+        return self.encrypt(ciphertext, key.reverse, encrypt=False)
+
+    def encrypt_block(self, block):
+
+        round_key = []
+
+        for i in range(self.number_of_rounds):
+            block = self.encrypt_round(block, round_key[i])
+
+    def encrypt_round(self, block, round_key):
+
+        left = block[0:32]
+        right = block[32:64]
+
+        f = self.apply_function(right, round_key)
+
+        next_left = right
+        next_right = left ^ f
+
+        return next_left + next_right
+
+    def apply_function(self, bits, sub_key):
+        # 32 bit => 48 bit
+        bits = self.expand(bits)
+        # 48 bit XOR 48 bit
+        bits ^= sub_key
+        # 48 bit => 32 bit
+        bits = self.substitute(bits)
+        # 32 bit => 32 bit
+        bits = self.permute(bits)
+
+        return bits
+
+    @staticmethod
+    def expand(bits):
+        expanded = bitarray(len(DES.E))
+
+        for i, e in enumerate(expanded):
+            expanded[i] = bits[DES.E[i] - 1]
+
+        return expanded
+
+    def substitute(self, bits):
+        blocks = self.split_bits(bits, 6)
+        new_bits = []
+
+        for i, block in enumerate(blocks):
+            left_outer_bit = block[0]
+            right_outer_bit = block[5]
+            outer_bits = bitarray([left_outer_bit, right_outer_bit])
+            inner_bits = block[1:4]
+
+            row = bitutils.bin_to_int(outer_bits)
+            col = bitutils.bin_to_int(inner_bits)
+
+            # should maybe convert to 4 bits before adding
+            s = DES.S[i][row][col]
+            new_bits.append(s)
+
+        return new_bits
+
+    @staticmethod
+    def permute(bits):
+        permuted = bitarray(len(DES.P))
+
+        for i, b in enumerate(permuted):
+            permuted[i] = bits[b - 1]
+
+        return permuted
+
+    def PC1_key(self, key):
+        assert(len(key) == 64)
+        permuted_key = bitarray(56)
+
+        for i, p in enumerate(DES.PC1):
+            permuted_key[i] = key[p-1]
+
+        assert(len(permuted_key) == 56)
+        return permuted_key
+
+
+    @staticmethod
+    def PC2_key(key):
+        permuted_key = bitarray(len(DES.PC2))
+
+        for i, p in enumerate(DES.PC2):
+            permuted_key[i] = key[p-1]
+
+        return permuted_key
+
+    @staticmethod
+    def split_bits(bits, number_of_bits=6):
+
+        #blocks = []
+
+        #for i in range(0, bits, number_of_bits):
+        #    blocks.append(bits[i:i+number_of_bits])
+
+        chunks = [bits[x:x+number_of_bits] for x in xrange(0, len(bits), number_of_bits)]
+
+        return chunks
+
+    def generate_sub_keys(self, key):
+        sub_keys = []
+
+        permuted_key = self.PC1_key(key)
+
+        left, right = bitutils.split_list(permuted_key)
+
+        for i in range(self.number_of_rounds):
+            left = bitutils.rotate(left, -DES.key_shifts[i])
+            right = bitutils.rotate(right, DES.key_shifts[i])
+
+            shifted_key = left + right
+
+            sub_key = self.PC2_key(shifted_key)
+
+            sub_keys.append(sub_key)
+
+        return sub_keys
+
+    @staticmethod
+    def permute_block(block, permutation_table):
+        permuted_block = bitarray(len(block))
+
+        print(len(block))
+        for i, b in enumerate(block):
+            permuted_block[i] = block[permutation_table[i] - 1]
+
+        return permuted_block
