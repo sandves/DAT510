@@ -38,6 +38,7 @@ def split_list(a_list):
             half = len(a_list)/2
             return a_list[:half], a_list[half:]
 
+
 def swap_list(a_list):
     left, right = split_list(a_list)
     return right + left

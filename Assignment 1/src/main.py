@@ -7,13 +7,12 @@ Created on Sep 9, 2015
 '''
 
 from feistel_cipher import FeistelCipher
-from bitarray import bitarray
 
 
 def main():
 
     des = FeistelCipher()
-    cipher = des.encrypt("stian", "sandvest")
+    cipher = des.encrypt("stian sandve", "sandvest")
     plaintext = des.decrypt(cipher.tobytes(), "sandvest")
     print(plaintext.tobytes())
 
