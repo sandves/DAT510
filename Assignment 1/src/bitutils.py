@@ -1,10 +1,13 @@
-#!/usr/bin/python
+# !/usr/bin/python
 
-'''
-Created on Sep 9, 2015
-
-@author: Stian Sandve
-'''
+##############################################################################
+# @file    bitutils.py
+# @author  Stian Sandve
+# @version V1.0.0
+# @date    9-Sep-2014
+# @brief   Some self explaining utility functions for bit and list
+# manipulation.
+###############################################################################
 
 
 def int_to_bin(s):
@@ -20,23 +23,23 @@ def bin_to_int(bits):
 
 def rotate(arr, places):
     if places >= 0:
-        return shift_right(arr, places)
+        return rotate_right(arr, places)
     else:
-        return shift_left(arr, -places)
+        return rotate_left(arr, -places)
 
 
 # http://stackoverflow.com/questions/19372771/shifting-list-circularly-python
-def shift_left(arr, n=0):
+def rotate_left(arr, n=0):
     return arr[n::] + arr[:n:]
 
 
-def shift_right(arr, n=0):
+def rotate_right(arr, n=0):
     return arr[n:len(arr):] + arr[0:n:]
 
 
 def split_list(a_list):
-            half = len(a_list)/2
-            return a_list[:half], a_list[half:]
+    half = len(a_list) / 2
+    return a_list[:half], a_list[half:]
 
 
 def swap_list(a_list):

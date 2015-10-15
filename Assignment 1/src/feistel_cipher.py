@@ -5,56 +5,67 @@
 # @author  Stian Sandve
 # @version V1.0.0
 # @date    9-Sep-2014
-# @brief   This class provides encryption and depcryption functions for
+# @brief   This class provides encryption and depcryption functions for a
 # Feistel cipher.
 ###############################################################################
 
+
 from bitarray import bitarray
+
 from des import DES
 import bitutils
 
 
 class FeistelCipher(object):
-    def __init__(self, number_of_rounds=16, block_size=64, key_size=64):
+    def __init__(self, number_of_rounds=16, block_size=64, key_size=56):
 
         self.number_of_rounds = number_of_rounds
         self.block_size = block_size
         self.key_size = key_size
 
-    @staticmethod
-    def parse_plaintext(plaintext):
+    def triple_encrypt(self, text, key):
+        cipher1 = self.encrypt(text, key[:7])
+        cipher2 = self.encrypt(cipher1.to01(), key[7:14])
+        cipher3 = self.encrypt(cipher2.to01(), key[14:21])
+        return cipher3
+
+    def triple_decrypt(self, text, key):
+        plaintext1 = self.decrypt(text, key[14:21])
+        plaintext2 = self.decrypt(plaintext1.to01(), key[7:14])
+        plaintext3 = self.decrypt(plaintext2.to01(), key[:7])
+        return plaintext3
+
+    def encrypt(self, text, key, encrypt=True):
         """
-        This function may be used for prepared the plaintext for encryption.
+        This is where every part of the encryption/decryption process is tied
+        together.
 
-        :param plaintext: text to be parsed.
-        :return: a bitarray of the parsed plaintext.
+        Following is a brief explanation of the algorithm:
+
+            1. Plaintext/cipher gets parsed.
+            2. Input is split into chunks of 64 bits (zero padding is applied
+               to the last block if needed.
+            3. A list of sub keys are generated. The will be one unique key per
+               round.
+            4. If decryption should be applied, the list of sub keys will be
+               reversed.
+            5. Apply a 16 round encryption to every block of data.
+
+        :param text: Data that will be encrypted/decrypted. Could be either
+        plaintext or ciphertext.
+        :param key: key used to encrypt/decrypt the data.
+        :param encrypt: If set to False, decryption will be applied. Default
+        value is True.
+        :return: a bitarray of the encrypted/decrypted data.
         """
-
-        binary = True
-
-        for c in plaintext:
-            if c is not "0" and c is not "1":
-                binary = False
-
-        print("Input is binary? %s" % binary)
-
-        if binary:
-            parsed = bitarray(plaintext)
-        else:
-            parsed = bitarray()
-            parsed.frombytes(plaintext)
-
-        return parsed
-
-    def encrypt(self, plaintext, key, encrypt=True):
 
         result = bitarray()
 
-        bits = plaintext
+        bits = self.parse_text(text)
 
         blocks = FeistelCipher.chunks(bits, self.block_size)
 
-        sub_keys = self.generate_sub_keys(self.parse_plaintext(key))
+        sub_keys = self.generate_sub_keys(self.parse_text(key))
 
         if not encrypt:
             sub_keys.reverse()
@@ -62,35 +73,12 @@ class FeistelCipher(object):
         for i in range(len(blocks)):
             block = blocks[i]
 
-            block = self.permute_block(block, DES.IP)
-
             for rnd in range(self.number_of_rounds):
                 block = self.encrypt_round(block, sub_keys[rnd])
 
             block = bitutils.swap_list(block)
 
-            block = self.permute_block(block, DES.IP_inverse)
-
             result.extend(block)
-
-        #if not encrypt:
-        #    result = self.parse_decrypted_cipher(40, result)
-
-        return result
-
-    def parse_decrypted_cipher(self, length, result):
-
-        if length < self.block_size:
-            leading_zeros = length % self.block_size
-        else:
-            leading_zeros = self.block_size - (length % self.block_size)
-
-        last_block_start = len(result) - leading_zeros
-
-        leading_blocks = result[:-self.block_size]
-        last_block = result[last_block_start:]
-
-        result = leading_blocks + last_block
 
         return result
 
@@ -107,19 +95,6 @@ class FeistelCipher(object):
 
         return self.encrypt(ciphertext, key, encrypt=False)
 
-    def encrypt_block(self, block):
-        """
-        Encrypts a block of 64 bits using a Feistel network of n rounds. The
-        number of rounds is specified in the constructor.
-
-        :param block: block to be encrypted.
-        """
-
-        round_key = []
-
-        for i in range(self.number_of_rounds):
-            block = self.encrypt_round(block, round_key[i])
-
     def encrypt_round(self, block, round_key):
         """
         Encrypts a block of 64 bits using a Feistel network of n rounds. The
@@ -130,8 +105,7 @@ class FeistelCipher(object):
         :return: the encrypted block.
         """
 
-        left = block[0:32]
-        right = block[32:64]
+        left, right = bitutils.split_list(block)
 
         f = self.round_function(right, round_key)
 
@@ -183,12 +157,38 @@ class FeistelCipher(object):
             row = bitutils.bin_to_int(outer_bits)
             col = bitutils.bin_to_int(inner_bits)
 
-            # should maybe convert to 4 bits before adding
             s = DES.S[i][row][col]
             b = '{0:04b}'.format(s)
             new_bits.extend(b)
 
         return new_bits
+
+    def generate_sub_keys(self, key):
+        """
+        Generate 48 bit sub keys from the provided 56 bit key. The function
+        will generate a list of length n, where n is the number of rounds,
+        containing the sub keys.
+
+        :param key: 56 bit key.
+        :return: list of length n, where n is the number of rounds,
+        containing the sub keys.
+        """
+
+        sub_keys = []
+
+        left, right = bitutils.split_list(key)
+
+        for i in range(self.number_of_rounds):
+            left = bitutils.rotate(left, -DES.key_shifts[i])
+            right = bitutils.rotate(right, DES.key_shifts[i])
+
+            shifted_key = left + right
+
+            sub_key = self.permute(shifted_key, DES.PC2)
+
+            sub_keys.append(sub_key)
+
+        return sub_keys
 
     @staticmethod
     def chunks(l, n):
@@ -211,11 +211,11 @@ class FeistelCipher(object):
         return c
 
     @staticmethod
-    def permute(key, permutation_table):
+    def permute(data, permutation_table):
         """
         Apply permutation to a list according to a permutation table.
 
-        :param key: list to be permuted.
+        :param data: list to be permuted.
         :param permutation_table: permutation lookup table.
         :return: permuted list.
         """
@@ -223,52 +223,29 @@ class FeistelCipher(object):
         permuted_key = bitarray(len(permutation_table))
 
         for i, p in enumerate(permutation_table):
-            permuted_key[i] = key[p - 1]
+            permuted_key[i] = data[p - 1]
 
         return permuted_key
 
-    def generate_sub_keys(self, key):
-        """
-        Generate 48 bit sub keys from the provided 64 bit key. The function
-        will generate a list of length n, where n is the number of rounds,
-        containing the sub keys.
-
-        :param key: 64 bit key.
-        :return: list of length n, where n is the number of rounds,
-        containing the sub keys.
-        """
-
-        sub_keys = []
-
-        permuted_key = self.permute(key, DES.PC1)
-
-        left, right = bitutils.split_list(permuted_key)
-
-        for i in range(self.number_of_rounds):
-            left = bitutils.rotate(left, -DES.key_shifts[i])
-            right = bitutils.rotate(right, DES.key_shifts[i])
-
-            shifted_key = left + right
-
-            sub_key = self.permute(shifted_key, DES.PC2)
-
-            sub_keys.append(sub_key)
-
-        return sub_keys
-
     @staticmethod
-    def permute_block(block, permutation_table):
+    def parse_text(plaintext):
+        """
+        This function may be used for prepared the plaintext for encryption.
+
+        :param plaintext: text to be parsed.
+        :return: a bitarray of the parsed plaintext.
         """
 
+        binary = True
 
-        :param block:
-        :param permutation_table:
-        :return:
-        """
+        for c in plaintext:
+            if c is not "0" and c is not "1":
+                binary = False
 
-        permuted_block = bitarray(len(block))
+        if binary:
+            parsed = bitarray(plaintext)
+        else:
+            parsed = bitarray()
+            parsed.frombytes(plaintext)
 
-        for i, b in enumerate(block):
-            permuted_block[i] = block[permutation_table[i] - 1]
-
-        return permuted_block
+        return parsed
