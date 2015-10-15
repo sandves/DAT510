@@ -45,27 +45,6 @@ def phi(p, q):
     return (p - 1) * (q - 1)
 
 
-def liste(p, q):
-    """
-    generates a list of available encryption exponents from p and q
-    """
-    phii = phi(p, q)
-    alpha = []
-    for i in range(2, 100):
-        if gcd(i, phii) == 1:
-            alpha.append(i)
-    return alpha
-
-
-def finde(p, q):
-    """
-    takes p and q and selects a random number from a generated list
-    """
-    date = liste(p, q)
-    from random import choice
-    return choice(date)
-
-
 def egcd(a, b):
     """
     Returns pair (x, y) such that ax + by = gcd(a, b)
@@ -161,23 +140,6 @@ def probably_prime(n, k=20):
     return True
 
 
-def genkeys(p, q):
-    """
-    generates random keys from p and q
-    """
-    phin = phi(p, q)
-    alpha = []
-    for i in range(2, 100):
-        if gcd(i, phin) == 1:
-            alpha.append(i)
-    date = liste(p, q)
-    from random import choice
-    e = choice(date)
-    for d in range(1, 10000):
-        if e * d % phin == 1:
-            return (e, d, phin)
-
-
 def generate_keys(length):
     import random
 
@@ -188,8 +150,22 @@ def generate_keys(length):
     n = p * q
     phi = (p - 1) * (q - 1)
     while True:
-        e = random.randit(3, phi - 1)
+        e = random.randint(3, phi - 1)
         if gcd(e, phi) == 1:
             break
     d = modinv(e, phi)
     return e, d, n
+
+
+def test():
+    import time
+    start = time.time()
+    e, d, n = generate_keys(2048)
+    m = 76000
+    cipher = encrypt(e, n, m)
+    print 'Cipher: %d' % cipher
+    plaintext = decrypt(d, n, cipher)
+    print 'Plaintext: %d' % plaintext
+    print 'Time elapsed: %fs' % (time.time() - start)
+
+test()
