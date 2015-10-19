@@ -1,41 +1,24 @@
 def encrypt(e, n, m):
-    """
-    Given e, n, and m return a number
-    """
     return pow_mod(m, e, n)
 
 
-def encryptlist(e, n, lon):
-    """
-    Given e, n (the modulus, and a list of numbers, encrypt each number
-    in the list and return a list of encrypted values.
-    """
-
-    return [encrypt(e, n, m) for m in lon]
+def encrypt_list(e, n, l):
+    return [encrypt(e, n, m) for m in l]
 
 
-def encryptstr(e, n, s):
-    """
-    given e, and n, select a number (c) return the decrypted value.
-    """
-    return encryptlist(e, n, [ord(c) for c in list(s)])
+def encrypt_str(e, n, s):
+    return encrypt_list(e, n, [ord(c) for c in list(s)])
 
 
 def decrypt(d, n, c):
-    """
-    Given d and n are given, select a number (c) and return the decrypted value.
-    """
     return pow_mod(c, d, n)
 
 
-def decryptlist(d, n, dalist):
-    return [x ** d % n for x in dalist]
+def decrypt_list(d, n, l):
+    return [pow_mod(x, d, n) for x in l]
 
 
 def gcd(a, b):
-    """
-    given a and b, return the greatest common divisor
-    """
     while b != 0:
         (a, b) = (b, a % b)
     return a
@@ -58,10 +41,10 @@ def egcd(a, b):
     return gcd, x, y
 
 
-def modinv(a, m):
+def modulo_inverse(a, m):
     gcd, x, y = egcd(a, m)
     if gcd != 1:
-        return None  # modular inverse does not exist
+        return None
     else:
         return x % m
 
@@ -73,44 +56,38 @@ def generate_random_prime(bits, primality_test):
     import random
     import itertools
 
-    get_random_t = lambda: random.getrandbits(bits) | 1 << bits | 1
-    p = get_random_t()
+    # Always set the most significant bit to one to ensure that the
+    # number is large enough.
+    get_random_number = lambda: random.getrandbits(bits) | 1 << bits | 1
+    p = get_random_number()
     for i in itertools.count(1):
         if primality_test(p):
             return p
         else:
             if i % (bits * 2) == 0:
-                p = get_random_t()
+                p = get_random_number()
             else:
-                p += 2  # Add 2 since we are only interested in odd numbers
+                p += 2
 
 
-def findd(e, p, q):
+def pow_mod(a, b, n):
     """
-    finds the value of d with the values of p and q
+    Compute (a ** b) % n efficiently.
     """
-    phiin = phi(p, q)
-    for d in range(1, 10000):
-        if e * d % phiin == 1:
-            return d
-
-
-def pow_mod(x, y, z):
-    "Calculate (x ** y) % z efficiently."
-    number = 1
-    while y:
-        if y & 1:
-            number = number * x % z
-        y >>= 1
-        x = x * x % z
-    return number
+    f = 1
+    while b:
+        if b & 1:
+            f = f * a % n
+        b >>= 1
+        a = a * a % n
+    return f
 
 
 def probably_prime(n, k=20):
-    """Return True if n passes k rounds of the Miller-Rabin primality
-    test (and is probably prime). Return False if n is proved to be
+    """
+    Return True if n passes k rounds of the Rabin-Miller primality
+    test. Return False if n is proved to be
     composite.
-
     """
     from random import randrange
     from primes import first_thousand_primes
@@ -128,11 +105,11 @@ def probably_prime(n, k=20):
         s //= 2
     for _ in range(k):
         a = randrange(2, n - 1)
-        x = pow(a, s, n)
+        x = pow_mod(a, s, n)
         if x == 1 or x == n - 1:
             continue
         for _ in range(r - 1):
-            x = pow(x, 2, n)
+            x = pow_mod(x, 2, n)
             if x == n - 1:
                 break
         else:
@@ -143,29 +120,21 @@ def probably_prime(n, k=20):
 def generate_keys(length):
     import random
 
-    p = generate_random_prime(length / 2, probably_prime)
-    q = generate_random_prime(length / 2, probably_prime)
+    p = generate_random_prime(length // 2, probably_prime)
+    #print 'P: %d' % p
+    q = generate_random_prime(length // 2, probably_prime)
+    #print 'Q: %d' % q
+    # Ensure that p != q
     while q == p:
-        q = generate_random_prime(length / 2, probably_prime)
+        q = generate_random_prime(length // 2, probably_prime)
     n = p * q
-    phi = (p - 1) * (q - 1)
+    #print 'N: %d' % n
+    phi_n = phi(p, q)
     while True:
-        e = random.randint(3, phi - 1)
-        if gcd(e, phi) == 1:
+        e = random.randint(3, phi_n - 1)
+        if gcd(e, phi_n) == 1:
             break
-    d = modinv(e, phi)
+    #e = 65537
+    d = modulo_inverse(e, phi_n)
+    #print 'D: %d' % d
     return e, d, n
-
-
-def test():
-    import time
-    start = time.time()
-    e, d, n = generate_keys(2048)
-    m = 76000
-    cipher = encrypt(e, n, m)
-    print 'Cipher: %d' % cipher
-    plaintext = decrypt(d, n, cipher)
-    print 'Plaintext: %d' % plaintext
-    print 'Time elapsed: %fs' % (time.time() - start)
-
-test()

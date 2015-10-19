@@ -1,0 +1,6 @@
+To run the application, simply type 'python main.py' into a terminal instance.
+
+The application takes one command line argument so that the user can set the wanted key size.
+The application is tested with key size up to 4096 bits, but for practical reasons you would want to set a much lower bit size when running the main.py script because you might run into some issues when you need to copy large amounts of text from the terminal window (e.g when copying ciphertext to perform a decryption). The default key size is set to 32 bits, but to set a different key size (for example 64 bits) simply run 'python main.py 64'.
+
+If you have encrypted the message using the "Encrpyt binary" method, you should choose "Decrypt binary" when decrypting the ciphertext. On the other hand, if you have encrypted using the "Encrypt characters" method, you should choose the "Decrypt characters" option when decrypting the ciphertext. When decrypting character data it is important that the commas in the ciphertext are preserved. For decryption to work, you need to use a ciphertext that was generated during the current runtime of the application because the keys are automatically regenerated everytime the script is ran.
